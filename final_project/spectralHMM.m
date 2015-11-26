@@ -1,5 +1,5 @@
 %If data is not already loaded, uncomment this
-% Authorize use of Quandl
+%Authorize use of Quandl
 
 %[data, headers] = Quandl.get('YAHOO/INDEX_GSPC','start_date','2010-11-23','end_date','2015-11-23','transformation','rdiff');
 
@@ -31,7 +31,7 @@ agg_returns = [timestep agg_returns];
 %create empirical estimates of P1, P21, P3_x_1
 %first randomly sample observation triples
 %num_samples is the number of samples
-num_samples = 100;
+num_samples = 1000;
 %also we truncate our observation array by the last two elements in order
 %to sample the end triple
 indices_to_sample = timestep(1:end-2);
@@ -62,3 +62,17 @@ for i=1:num_discrete_obs
 end
 
 %Create our P3_x_1 matrices
+%initialize P3 as a multidimensional array
+%P3(:,:,x) corresponds to P3_x_1
+V = zeros(num_discrete_obs,num_discrete_obs,num_discrete_obs);
+P3 = cell(1,6);
+for i=1:num_discrete_obs
+    for j=1:num_discrete_obs
+        for k=1:num_discrete_obs
+            V(k,j,i)=sum(ismember(triples,[k j i],'rows'))/num_samples;
+        end
+    end
+    P3{i}=V(:,:,i);
+end
+
+clear V;
