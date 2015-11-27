@@ -47,7 +47,7 @@ end
 
 %now that we have our samples of observation triples, generate P1, P2,
 %P3_x,1
-P1 = zeros(1,num_discrete_obs);
+P1 = zeros(1,num_discrete_obs)';
 %initialize P1
 for i=1:num_discrete_obs
     P1(i) = sum(triples(:,1)==i)/num_samples;
@@ -57,22 +57,35 @@ P2 = zeros(num_discrete_obs);
 %initialize P2
 for i=1:num_discrete_obs
     for j=1:num_discrete_obs
-        P2(i,j)=sum(ismember(triples(:,1:2),[i j],'rows'))/num_samples;
+        P2(i,j)=sum(ismember(triples(:,1:2),[j i],'rows'))/num_samples;
     end
 end
 
 %Create our P3_x_1 matrices
 %initialize P3 as a multidimensional array
-%P3(:,:,x) corresponds to P3_x_1
-V = zeros(num_discrete_obs,num_discrete_obs,num_discrete_obs);
-P3 = cell(1,6);
-for i=1:num_discrete_obs
-    for j=1:num_discrete_obs
-        for k=1:num_discrete_obs
-            V(k,j,i)=sum(ismember(triples,[k j i],'rows'))/num_samples;
+%P3{i} corresponds to P3_x_1
+H = zeros(num_discrete_obs,num_discrete_obs,num_discrete_obs);
+P3 = cell(1,num_discrete_obs);
+for x=1:num_discrete_obs
+    for i=1:num_discrete_obs
+        for j=1:num_discrete_obs
+            H(i,j,x)=sum(ismember(triples,[j x i],'rows'))/num_samples;
         end
     end
-    P3{i}=V(:,:,i);
+    P3{x}=H(:,:,x);
 end
 
-clear V;
+clear H;
+
+%now we compute model parameters
+[A,~,~]=svd(P2);
+
+num_states=3;
+U=A(:,1:num_states);
+
+b_1 = U'*P1;
+b_inf = pinv(P2' * U) * P1;
+B = cell(1,num_discrete_obs);
+for i=1:num_discrete_obs
+    B{i} = U' * P3{i} * pinv(U'*P2);
+end
