@@ -1,8 +1,9 @@
-function [predicted_obs] = HMM_predict(data,subset,num_states,num_discrete_obs,num_samples)
+function [predicted_obs, true_obs] = HMM_predict(data,subset_size,num_states,num_discrete_obs,num_samples)
+%data=data
+%subset=first (subset) days of data we use for training
+assert(length(data) > subset_size);
 
-assert(length(data) > subset);
-
-[B,b_1,b_inf]=HMM_calculate_params(data(1:subset),num_states,num_discrete_obs,num_samples);
+[B,b_1,b_inf]=HMM_calculate_params(data(1:subset_size),num_states,num_discrete_obs,num_samples);
 
 % create a table of length one tenth of the original dataset
 % since we are looking at returns over 10 day intervals
@@ -11,14 +12,15 @@ num_days=10;
 
 %now everything is going to have discrete observations
 
-training_length = floor(subset/num_days);
+training_length = floor(subset_size/num_days);
 prediction_length=floor(length(data)/num_days);
 predicted_obs=zeros(1,prediction_length)';
 
 %timestep = (1:prediction_length)';
 
 %add our training data to our prediction table
-train_obs = HMM_discretize(aggregate(data(1:subset),num_days),num_discrete_obs);
+true_obs = HMM_discretize(aggregate(data,num_days),num_discrete_obs);
+train_obs = HMM_discretize(aggregate(data(1:subset_size),num_days),num_discrete_obs);
 predicted_obs(1:training_length)=train_obs;
 
 %b represents internal states
@@ -45,6 +47,8 @@ for i = training_length:(prediction_length-1)
         %cond_probs{j}=( (b_inf)'*B{j}*b{i} ) / sum(cellfun(@(x) (b_inf)'*x*b{i},B));
     %end
 end
+
+
 %finish this
     
 

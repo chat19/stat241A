@@ -1,0 +1,26 @@
+suptitle('Comparison of Predicted vs. Actual Observation States')
+subplot(2,3,1)
+plot(compare2(70:89,:))
+ylim([0 7])
+legend('actual','predicted')
+title('2 Hidden States')
+subplot(2,3,2)
+plot(compare3(70:89,:))
+ylim([0 7])
+legend('actual','predicted')
+title('3 Hidden States');
+subplot(2,3,3)
+plot(compare4(70:89,:))
+ylim([0 7])
+legend('actual','predicted')
+title('4 Hidden States');
+subplot(2,3,4)
+plot(compare5(70:89,:))
+ylim([0 7])
+legend('actual','predicted')
+title('5 Hidden States');
+subplot(2,3,5)
+plot(compare6(70:89,:))
+ylim([0 7])
+legend('actual','predicted')
+title('6 Hidden States');

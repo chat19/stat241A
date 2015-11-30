@@ -34,15 +34,28 @@ hmm = [timestep HMM_discretize(agg_returns,num_discrete_obs)];
 % first randomly sample observation triples
 % also we truncate our observation array by the last two elements in order
 % to sample the end triple
-indices_to_sample = timestep(1:end-2);
 
 rng('default');
 
-sampled_indices=randsample(indices_to_sample,num_samples,true);
+triple_sampled_indices=randsample(timestep(1:end-2),num_samples,true);
 triples=zeros(num_samples,3);
 for i=1:num_samples
-    j=sampled_indices(i);
+    j=triple_sampled_indices(i);
     triples(i,:)=hmm(j:j+2,2);
+end
+
+double_sampled_indices=randsample(timestep(1:end-1),num_samples,true);
+doubles=zeros(num_samples,2);
+for i=1:num_samples
+    j=double_sampled_indices(i);
+    doubles(i,:)=hmm(j:j+1,2);
+end
+
+single_sampled_indices=randsample(timestep(1:end-2),num_samples,true);
+singles=zeros(num_samples,1);
+for i=1:num_samples
+    j=single_sampled_indices(i);
+    singles(i,:)=hmm(j,2);
 end
 
 % now that we have our samples of observation triples, generate P1, P2_1,
@@ -50,14 +63,14 @@ end
 P1 = zeros(1,num_discrete_obs)';
 % initialize P1
 for i=1:num_discrete_obs
-    P1(i) = sum(triples(:,1)==i)/num_samples;
+    P1(i) = sum(singles(:,1)==i)/num_samples;
 end
 
 P2 = zeros(num_discrete_obs);
 % initialize P2
 for i=1:num_discrete_obs
     for j=1:num_discrete_obs
-        P2(i,j)=sum(ismember(triples(:,1:2),[j i],'rows'))/num_samples;
+        P2(i,j)=sum(ismember(doubles(:,1:2),[j i],'rows'))/num_samples;
     end
 end
 
@@ -87,7 +100,7 @@ U=A(:,1:num_states);
 
 b_1 = U'*P1;
 b_inf = pinv(P2' * U) * P1;
-B = cell(1,num_discrete_obs);
+B = cell(1,num_discrete_obs)';
 for i=1:num_discrete_obs
     B{i} = U' * P3{i} * pinv(U'*P2);
 end
