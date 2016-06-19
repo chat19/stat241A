@@ -1,46 +1,71 @@
+# This script is part of the final project for
+# STAT 241A: Statistical Learning Theory.
+# The objective is to implement the hidden markov
+# model for stock returns. Volatility is treated
+# as hidden states, and the observations are the
+# stock returns.
+#
+# Author: Chun Yu Hong (Johnny) (jcyhong@berkeley.edu)
+
+#---------------------------------------------
+# Load the necessary packages.
 library("quantmod")
+library("reshape2")
+library("ggplot2")
 library(RColorBrewer)
 
-# Remark: sigmas refers to sigma squared.
+#---------------------------------------------
 
-alpha_norm <- function(y, A, init_prob, sigmas){
-  num_states <- length(init_prob)
+# Remark: For simplicity, sigmas refers to sigma squared.
+
+AlphaNorm <- function(y, A, initProb, sigmas){
+  # Implement the alpha part of the alpha-beta algorithm.
+  #
+  # Args:
+  #   y: the observations
+  #   A: the transition matrix
+  #   initProb: the initial probability vector
+  #   sigmas: the variance parameters
+  # Returns:
+  #   alpha: the list of alphas
+  
+  numStates <- length(initProb)
   TT <- length(y)
   alpha <- list()
-  alpha1 <- rep(NA, num_states)
-  for(i in 1:num_states){
-    alpha1[i] <- dnorm(y[[1]], sd = sqrt(sigmas[i])) * init_prob[i]
+  alpha1 <- rep(NA, numStates)
+  for(i in 1:numStates){
+    alpha1[i] <- dnorm(y[[1]], sd = sqrt(sigmas[i])) * initProb[i]
   }
   alpha[[1]] <- alpha1/sum(alpha1)
   for(i in 2:TT){
-    alpha_temp <- rep(NA, num_states)
-    for(j in 1:num_states){
-      a <- rep(NA, num_states)
-      for(jj in 1:num_states){
+    alphaTemp <- rep(NA, numStates)
+    for(j in 1:numStates){
+      a <- rep(NA, numStates)
+      for(jj in 1:numStates){
         a[jj] <- alpha[[i-1]][jj]*A[jj, j]*dnorm(y[i], sd = sqrt(sigmas[j]))
       }
-      alpha_temp[j] <- sum(a)
+      alphaTemp[j] <- sum(a)
     }
-    alpha[[i]] <- alpha_temp/sum(alpha_temp)
+    alpha[[i]] <- alphaTemp/sum(alphaTemp)
   }
   alpha
 }
 
-# backward <- function(y, A, init_prob, sigmas){
-#   num_states <- length(init_prob)
+# backward <- function(y, A, initProb, sigmas){
+#   numStates <- length(initProb)
 #   TT <- length(y)
 #   beta <- list()
-#   beta1 <- rep(1, num_states)
+#   beta1 <- rep(1, numStates)
 #   beta[[TT]] <- beta1
 #   for(i in (TT-1):1){
-#     temp <- rep(NA, num_states)
-#     for(q_t in 1:num_states){
+#     temp <- rep(NA, numStates)
+#     for(qT in 1:numStates){
 #       temp2 <- 0
-#       for(q_t1 in 1:num_states){
-#         temp2 <- temp2 + beta[[i + 1]][q_t1] * 
-#           dnorm(y[i + 1], sd = sqrt(sigmas[q_t1])) * A[q_t,q_t1] 
+#       for(qT1 in 1:numStates){
+#         temp2 <- temp2 + beta[[i + 1]][qT1] * 
+#           dnorm(y[i + 1], sd = sqrt(sigmas[qT1])) * A[qT,qT1] 
 #       }
-#       temp[q_t] <- temp2
+#       temp[qT] <- temp2
 #     }
 #     beta[[i]] <- temp
 #   }
@@ -48,43 +73,62 @@ alpha_norm <- function(y, A, init_prob, sigmas){
 # }
 
 
-gamma_infer <- function(alpha, A){
-  num_states <- nrow(A)
+GammaInfer <- function(alpha, A){
+  # Implement the gamma part of the alpha-beta algorithm.
+  #
+  # Args:
+  #   alpha: the list of alphas
+  #   A: the transition matrix
+  # Returns:
+  #   gamma: a lust of gammas
+  
+  numStates <- nrow(A)
   TT <- length(alpha)
   gamma <- list()
   gamma[[TT]] <- alpha[[TT]]
   for(i in (TT - 1):1){
-    temp <- rep(NA, num_states)
-    for(q_t in 1:num_states){
-      final_terms <- rep(NA, num_states)
-      for(q_t1 in 1:num_states){
+    temp <- rep(NA, numStates)
+    for(qT in 1:numStates){
+      finalTerms <- rep(NA, numStates)
+      for(qT1 in 1:numStates){
         # Compute all the terms in the denominator.
-        temp2 <- rep(NA, num_states)
-        for(q_temp in 1:num_states){
-          temp2[q_temp] <- alpha[[i]][q_temp] * A[q_temp, q_t1]
+        temp2 <- rep(NA, numStates)
+        for(qTemp in 1:numStates){
+          temp2[qTemp] <- alpha[[i]][qTemp] * A[qTemp, qT1]
         }
         # Normalize.
         temp2 <- temp2/sum(temp2)
-        final_terms[q_t1] <- temp2[q_t]* gamma[[i + 1]][q_t1]
+        finalTerms[qT1] <- temp2[qT]* gamma[[i + 1]][qT1]
       }
-      temp[q_t] <- sum(final_terms)
+      temp[qT] <- sum(finalTerms)
     }
     gamma[[i]] <- temp
   }
   gamma
 }
 
-xi_infer <- function(alpha, gamma, A, y, sigmas){
-  num_states = nrow(A)
+XiInfer <- function(alpha, gamma, A, y, sigmas){
+  # Implement the xi part of the alpha-beta algorithm.
+  #
+  # Args:
+  #   y: the observations
+  #   gamma: a list of gammas
+  #   A: the transition matrix
+  #   y: a vector of observations
+  #   sigmas: the variance parameters
+  # Returns:
+  #   xi: a list of xis
+  
+  numStates = nrow(A)
   TT <- length(alpha)
   # xi is a list of four-dimensional arrays.
   xi <- list()
   for(i in 1:(TT-1)){
-    temp <- matrix(0, nrow = num_states, ncol = num_states)
-    for(q_t in 1:num_states){
-      for(q_t1 in 1:num_states){
-        temp[q_t, q_t1] <- alpha[[i]][q_t]*dnorm(y[i+1], sd = sqrt(sigmas[q_t1]))*
-          gamma[[i + 1]][q_t1]* A[q_t, q_t1] / alpha[[i+1]][q_t1]
+    temp <- matrix(0, nrow = numStates, ncol = numStates)
+    for(qT in 1:numStates){
+      for(qT1 in 1:numStates){
+        temp[qT, qT1] <- alpha[[i]][qT]*dnorm(y[i+1], sd = sqrt(sigmas[qT1]))*
+          gamma[[i + 1]][qT1]* A[qT, qT1] / alpha[[i+1]][qT1]
       }
     }
     xi[[i]] <- temp/sum(temp)
@@ -92,36 +136,62 @@ xi_infer <- function(alpha, gamma, A, y, sigmas){
   xi
 }
 
-loglik_HMM <- function(y, A, sigmas, init_prob, gamma, xi){
-  first_term <- sum(init_prob * log(init_prob))
-  second_term <- sum(Reduce("+", xi) * log(A))
+loglikHMM <- function(y, A, sigmas, initProb, gamma, xi){
+  # Compute the log-likelihood of the HMM model.
+  #
+  # Args:
+  #   y: the observations
+  #   A: the transition matrix
+  #   sigmas: the variance parameters
+  #   initProb: the initial probability vector
+  #   gamma: a list of gammas
+  #   xi: a list of xis
+  # Returns:
+  #   loglik: the log-likelihood of the HMM model
+  
+  firstTerm <- sum(initProb * log(initProb))
+  
+  secondTerm <- sum(Reduce("+", xi) * log(A))
+  
   temp <- lapply(1:length(gamma), function(i){
     gamma[[i]] * (y[i])^2
   })
   Er <- Reduce("+", temp)
-  third_term <- sum(-1/(2 * sigmas) * Er)
+  thirdTerm <- sum(-1/(2 * sigmas) * Er)
+  
   En <- Reduce("+", gamma)
-  fourth_term <- sum((-1/2 * log(2 * pi) - 1/2 * log(sigmas)) * En)
-  loglik <- first_term + second_term + third_term + fourth_term
+  fourthTerm <- sum((-1/2 * log(2 * pi) - 1/2 * log(sigmas)) * En)
+  
+  loglik <- firstTerm + secondTerm + thirdTerm + fourthTerm
   loglik
 }
 
 
 
-EM_HMM <- function(y, params, max_it = 1000, eps = 10^(-20)){
-  A_curr <- params[[1]]
-  init_prob_curr <- params[[2]]
-  sigmas_curr <- params[[3]]
-  num_states <- length(init_prob_curr)
+EM_HMM <- function(y, params, maxIt = 1000, eps = 10^(-20)){
+  # Run the EM algorithm for the hidden Markov model.
+  #
+  # Args:
+  #   y: a vector of observations
+  #   params: a list of parameters of the HMM
+  #   maxIt: the maximum iterations of EM
+  #   eps: the tolerance
+  # Returns
+  #   a list containing the parameter estimates and the log-likelihood
+  
+  ACurr<- params[[1]]
+  initProbCurr <- params[[2]]
+  sigmasCurr <- params[[3]]
+  numStates <- length(initProbCurr)
   loglikelihood <- c()
-  for(tt in 1:max_it){
-    A_old <- A_curr
-    sigmas_old <- sigmas_curr
-    init_prob_old <- init_prob_curr
+  for(tt in 1:maxIt){
+    AOld <- ACurr
+    sigmasOld <- sigmasCurr
+    initProbOld <- initProbCurr
     # HMM inference.
-    alpha <- alpha_norm(y, A_curr , init_prob_curr , sigmas_curr )
-    gamma <- gamma_infer(alpha, A_curr )
-    xi <- xi_infer(alpha, gamma, A_curr, y, sigmas_curr )
+    alpha <- AlphaNorm(y, ACurr, initProbCurr , sigmasCurr )
+    gamma <- GammaInfer(alpha, ACurr)
+    xi <- XiInfer(alpha, gamma, ACurr, y, sigmasCurr )
     
     # E step
     En <- Reduce("+", gamma)
@@ -134,90 +204,123 @@ EM_HMM <- function(y, params, max_it = 1000, eps = 10^(-20)){
     Er <- Reduce("+", temp2)
     
     # M step 
-    A_curr  <- Em/rowSums(Em)
-    sigmas_curr  <- Er/En
-    init_prob_curr  <- gamma[[1]]
+    ACurr <- Em/rowSums(Em)
+    sigmasCurr  <- Er/En
+    initProbCurr  <- gamma[[1]]
     loglikelihood <- c(loglikelihood, 
-                       loglik_HMM(y, A_curr, sigmas_curr, init_prob_curr, gamma, xi))
-    if(sum((A_old - A_curr)^2) <= eps^2 & sum((sigmas_old - sigmas_curr)^2) <= eps^2){
+                       loglik_HMM(y, ACurr, sigmasCurr, initProbCurr, gamma, xi))
+    if(sum((AOld - ACurr)^2) <= eps^2 & sum((sigmasOld - sigmasCurr)^2) <= eps^2){
       break
     }
   }
-  #return(list(A_curr, init_prob_curr, sigmas_curr))
-  return(list(A_curr, init_prob_curr, sigmas_curr, loglikelihood))
+  #return(list(ACurr, initProbCurr, sigmasCurr))
+  return(list(ACurr, initProbCurr, sigmasCurr, loglikelihood))
 }
 
-compute_returns <- function(prices){
+ComputeReturns <- function(prices){
+  # Compute the stock returns based on prices.
+  #
+  # Args:
+  #   prices: a vector of prices
+  # Returns:
+  #   a vector of returns, with length one less than prices
   prices <- as.numeric(prices)
   diff(prices)/prices[-length(prices)]
 }
 
-param_init <- function(num_states){
-  A <- matrix(1/num_states, nrow = num_states, ncol = num_states)
-  init_prob <- rep(1/num_states, num_states)
-  sigmas <- seq(0.1, 0.9, 0.8/(num_states - 1))
-  list(A, init_prob, sigmas )
+ParamInit <- function(numStates){
+  # Returns an initial guess of the parameters.
+  #
+  # Args:
+  #   numStates: the number of hidden states
+  # Returns:
+  #   a list of parameters
+  A <- matrix(1/numStates, nrow = numStates, ncol = numStates)
+  initProb <- rep(1/numStates, numStates)
+  sigmas <- seq(0.1, 0.9, 0.8/(numStates - 1))
+  list(A, initProb, sigmas )
 }
 
-compute_returns <- function(df){
+ComputeReturns <- function(df){
+  # Compute returns based on a data frame, in which the
+  # sixth column contains prices.
+  #
+  # Args:
+  #   df: a data frame in which the
+  #       sixth column contains prices
+  # Returns:
+  #   a vector of returns
   prices <- df[,6]
   prices <- as.numeric(prices)
   diff(prices)/prices[-length(prices)]
 }
 
 # Viterbi algorithm.
-find_max_config <- function(y, params){
+FindMaxConfig <- function(y, params){
+  # Find the configuration with the highest likelihood
+  #
+  # Args:
+  #   y: a vector of observations
+  #   params: a vector of parameters
+  # Returns:
+  #   a list containing the messages and the max-likelihood
+  #   configuration
   TT <- length(y)
   A <- params[[1]]
-  init_prob <- params[[2]]
+  initProb <- params[[2]]
   sigmas <- params[[3]]
-  num_states <- length(init_prob)
+  numStates <- length(initProb)
   
   messages <- list()
   config <- list()
   
-  message_q_T_1 <- rep(NA, num_states)
-  config_q_T_1 <- rep(NA, num_states)
-  for(q_T_1 in 1:num_states){
-    temp <- rep(NA, num_states)
-    for(q_T in 1:num_states){
-      temp[q_T] <- A[q_T_1, q_T] * dnorm(y[TT], sd = sqrt(sigmas[q_T]))
+  messageQT1 <- rep(NA, numStates)
+  configQT1 <- rep(NA, numStates)
+  for(qT1 in 1:numStates){
+    temp <- rep(NA, numStates)
+    for(qT in 1:numStates){
+      temp[qT] <- A[qT1, qT] * dnorm(y[TT], sd = sqrt(sigmas[qT]))
     }
-    message_q_T_1[q_T_1] <- max(temp)
-    config_q_T_1[q_T_1] <- which.max(temp)
+    messageQT1[qT1] <- max(temp)
+    configQT1[qT1] <- which.max(temp)
   }
-  messages[[TT]] <- message_q_T_1
-  config[[TT]] <- config_q_T_1
+  messages[[TT]] <- messageQT1
+  config[[TT]] <- configQT1
   
   for(i in (TT - 1):2){
-    message_q_i_1 <- rep(NA, num_states)
-    config_q_i_1 <- rep(NA, num_states)
-    for(q_i_1 in 1:num_states){
-      temp <- rep(NA, num_states)
-      for(q_i in 1:num_states){
-        temp[q_i] <- A[q_i_1, q_i] * dnorm(y[i], sd = sqrt(sigmas[q_i])) *
+    messageqI1 <- rep(NA, numStates)
+    config_qI1 <- rep(NA, numStates)
+    for(qI1 in 1:numStates){
+      temp <- rep(NA, numStates)
+      for(q_i in 1:numStates){
+        temp[q_i] <- A[qI1, q_i] * dnorm(y[i], sd = sqrt(sigmas[q_i])) *
           messages[[i + 1]][q_i]
       }
-      message_q_i_1[q_i_1] <- max(temp)
-      config_q_i_1[q_i_1] <- which.max(temp)
+      messageqI1[qI1] <- max(temp)
+      config_qI1[qI1] <- which.max(temp)
     }
-    messages[[i]] <- message_q_i_1
-    config[[i]] <- config_q_i_1
+    messages[[i]] <- messageqI1
+    config[[i]] <- config_qI1
   }
   
-  lik <- rep(NA, num_states)
-  q_1_state <- rep(NA, num_states)
-  all_lik <- sapply(1:num_states, function(q_1){
-    init_prob[q_1] * dnorm(y[1], sd = sqrt(sigmas[q_1])) * messages[[2]][q_1]
+  lik <- rep(NA, numStates)
+  q1State <- rep(NA, numStates)
+  allLik <- sapply(1:numStates, function(q1){
+    initProb[q1] * dnorm(y[1], sd = sqrt(sigmas[q1])) * messages[[2]][q1]
   })
-  messages[[1]] <- max(all_lik)
-  config[[1]] <- which.max(all_lik)
+  messages[[1]] <- max(allLik)
+  config[[1]] <- which.max(allLik)
   
   return(list(messages, config))
 }
 
-# Extract the sequence of max-likelihood states.
-get_seq <- function(config){
+GetSeq <- function(config){
+  # Extract the sequence of max-likelihood states.
+  #
+  # Args:
+  #   config: the configuation of states
+  # Returns:
+  #   sequ: the sequence of max-likelihood states
   sequ <- config[[2]][[1]]
   # Trace the path.
   for(i in 2:length(config[[2]])){
@@ -226,11 +329,25 @@ get_seq <- function(config){
   sequ
 }
 
-extract_info <- function(ticker, interval = 10, centered = T){
+ExtractInfo <- function(ticker, interval = 10, centered = T, numRm = 0){
+  # Extract the stock data from yahoo based on ticker.
+  #
+  # Args:
+  #   ticker: a character vector 
+  #   interval: the time interval between consecutive prices
+  #   centered: a boolean indicating whether the prices are centered
+  #   numRm: number of observations to be removed
+  #
+  # Returns:
+  #   info: a list of (centered) prices and the data frame
   temp <- getSymbols(ticker,src="yahoo", env = NULL)
   temp <- temp[seq(1, nrow(temp), by = interval),]
+  if(numRm > 0){
+    n = length(temp)
+    temp <- temp[-((n - numRm + 1):n), ]
+  }
   info <- list()
-  info[[1]] <- compute_returns(temp)
+  info[[1]] <- ComputeReturns(temp)
   if(centered){
     #avg <- prod(1 + info[[1]]) ^ (1/length(info[[1]])) - 1
     avg <- mean(info[[1]])
@@ -240,13 +357,25 @@ extract_info <- function(ticker, interval = 10, centered = T){
   return(info)
 }
 
-info_analysis <- function(info, num_states, ticker){
+InfoAnalysis <- function(info, numStates, ticker){
+  # Create plots of the stock, including results
+  # from the HMM.
+  #
+  # Args:
+  #   info: a list of info
+  #   numStates: an integer indicating the number of hidden states
+  #   ticker: a character vector
+  # Returns:
+  #   a histogram of centered returns
+  #   an acf plot of the returns
+  #   a plot of the predicted prices
+  #   a plot of the volatility stages
   training <- info[[1]]
-  results_training <- EM_HMM(training, param_init(num_states), 150)
-  config <- find_max_config(training, results_training)
-  info[[2]] <- cbind(info[[2]], c(NA, get_seq(config)))
-  plot(get_seq(config), type = "l")
-  cols = rainbow(num_states)
+  resultsTraining <- EM_HMM(training, ParamInit(numStates), 150)
+  config <- FindMaxConfig(training, resultsTraining)
+  info[[2]] <- cbind(info[[2]], c(NA, GetSeq(config)))
+  plot(GetSeq(config), type = "l")
+  cols = rainbow(numStates)
   
   par(mfrow = c(2,2), oma = c(0, 0, 2, 0))
   hist(info[[1]], main = "Centered Returns", xlab = "Centered Returns")
@@ -257,45 +386,92 @@ info_analysis <- function(info, num_states, ticker){
 }
 
 
-likelihood_analysis <- function(returns, num_states_vec){
-  logliks <- sapply(num_states_vec, function(num_states){
-    results <- EM_HMM(returns, param_init(num_states), 150)
+LikelihoodAnalysis <- function(returns, numStatesVec){
+  # Plot the log-likelihood against the number of hidden states.
+  # 
+  # Args:
+  #   returns: a vector of returns
+  #   numStatesVec: a vector of numbers of hidden states
+  # Returns:
+  #   logliks: a vector of log-likelihoods
+  
+  logliks <- sapply(numStatesVec, function(numStates){
+    results <- EM_HMM(returns, ParamInit(numStates), 150)
     max(results[[4]])
   })
-  plot(num_states_vec, logliks, main = "Log likelihood for different\nnumber of states")
+  plot(numStatesVec, logliks, main = "Log likelihood for different\nnumber of states")
   return(logliks)
 }
 
-find_BICs <- function(logliks, returns, num_states_vec){
+FindBICs <- function(logliks, returns, numStatesVec){
+  # Compute the BICs based on the number of states and log-likelihoods.
+  #
+  # Args:
+  #   logliks: a vector of log-likelihoods
+  #   returns: a vector of returns
+  #   numStatesVec: a vector of numbers of hidden states
+  # Returns:
+  #   a plot of the BICs against the number of states in the HMM
+  #   a vector of BICs
   num_obs <- length(returns)
-  num_of_params <- sapply(num_states_vec, function(i){
-    num_init_prob <- i - 1
-    num_A <- i * (i - 1)
-    num_sigmas <- i
-    num_init_prob + num_A + num_sigmas
+  numOfParams <- sapply(numStatesVec, function(i){
+    numInitProb <- i - 1
+    numA <- i * (i - 1)
+    numSigmas <- i
+    numInitProb + numA + numSigmas
   }) 
-  BICs <- -2 * logliks + num_of_params * log(num_obs)
-  plot(num_states_vec, BICs, main = "BICs for different number of states",
+  BICs <- -2 * logliks + numOfParams * log(num_obs)
+  plot(numStatesVec, BICs, main = "BICs for different number of states",
        type = "b", xlab = "Number of States")
   BICs
 }
 
 
-info <- extract_info("AMZN")
-info_analysis(info, 2, "AMZN")
+Simulation <- function(numRm, mu, centeredReturns){
+  # Run simulations based on HMM.
+  # 
+  # Args:
+  #   numRm: number of observations removed from the observations
+  #   mu: the mean parameter
+  #   centeredReturns: a vector of centered returns
+  # Returns:
+  #   a vector of simulated returns
+  training <- centeredReturns
+  resultsTraining <- EM_HMM(training, ParamInit(2), 150)
+  A <- resultsTraining[[1]]
+  sigmas <- resultsTraining[[3]]
+  config <- FindMaxConfig(training, resultsTraining)
+  maxLikSeq <- GetSeq(config)
+  curr <- maxLikSeq[length(maxLikSeq)]
+  predictedSeq <- rep(NA, numRm)
+  for(i in 1:numRm){
+    if(runif(1) <= A[curr, 1]){
+      predictedSeq[i] <- 1
+    }else{
+      predictedSeq[i] <- 2
+    }
+    curr <- predictedSeq[i] 
+  }
+  mu + rnorm(numRm, sd = sqrt(sigmas[predictedSeq]))
+}
+
+
+
+info <- ExtractInfo("AMZN")
+InfoAnalysis(info, 2, "AMZN")
 dev.off()
-results_training <- EM_HMM(info[[1]], param_init(2), 150)
-logliks <- likelihood_analysis(info[[1]], 2:8)
-BICs <- find_BICs(logliks, info[[1]], 2:8)
+resultsTraining <- EM_HMM(info[[1]], ParamInit(2), 150)
+logliks <- LikelihoodAnalysis(info[[1]], 2:8)
+BICs <- FindBICs(logliks, info[[1]], 2:8)
 plot(2:8, BICs, main = "BICs for different number of states (AMZN)",
      type = "b", xlab = "Number of States")
 
-info2 <- extract_info("PLNR")
-info_analysis(info2, 3, "PLNR")
+info2 <- ExtractInfo("PLNR")
+InfoAnalysis(info2, 3, "PLNR")
 dev.off()
-results_training2 <- EM_HMM(info2[[1]], param_init(3), 150)
-logliks2 <- likelihood_analysis(info2[[1]], 2:8)
-BICs2 <- find_BICs(logliks2, info2[[1]], 2:8)
+resultsTraining2 <- EM_HMM(info2[[1]], ParamInit(3), 150)
+logliks2 <- LikelihoodAnalysis(info2[[1]], 2:8)
+BICs2 <- FindBICs(logliks2, info2[[1]], 2:8)
 
 png("BICs")
 plot(2:8, BICs, main = "BICs for different number of states",
@@ -308,34 +484,63 @@ legend("topleft", legend = c("AMZN", "PLNR"), lty = c(1,2), col = c("black", "re
 dev.off()
 
 
-get_volatility <- function(ticker){
-  info <- extract_info(ticker)
-  logliks <- likelihood_analysis(info[[1]], 2:6)
-  BICs <- find_BICs(logliks, info[[1]], 2:6)
-  num_VS <- which.min(BICs) + 1
-  results <- EM_HMM(info[[1]], param_init(num_VS), 150)
+GetVolatility <- function(ticker){
+  # Extract the estimated volatility based on the HMM.
+  #
+  # Args:
+  #   ticker: a character vector
+  # Returns:
+  #   a vector of volatility stages
+  info <- ExtractInfo(ticker)
+  logliks <- LikelihoodAnalysis(info[[1]], 2:6)
+  BICs <- FindBICs(logliks, info[[1]], 2:6)
+  numVS <- which.min(BICs) + 1
+  results <- EM_HMM(info[[1]], ParamInit(numVS), 150)
   results[[3]]
 }
 
-ticker_list <- c("AMZN", "AAPL", "MSFT", "XOM", "T",
+# Mega-cap stocks.
+tickerList <- c("AMZN", "AAPL", "MSFT", "XOM", "T",
                  "PLNR", "HSC", "TREX", "ANF", "ALK")
-volatility_all <- lapply(ticker_list, get_volatility)
-sqrt_var <- lapply(volatility_all, sqrt)
+volatilityAll <- lapply(tickerList, GetVolatility)
+sqrtVar <- lapply(volatilityAll, sqrt)
 
-ticker_list2 <- c("JNJ", "WFC", "GE", "CVX", "WMT",
+# Small-cap stocks.
+tickerList2 <- c("JNJ", "WFC", "GE", "CVX", "WMT",
                  "UBCP", "CIZN", "KFFB", "DOM", "CSPI")
-volatility_all2 <- lapply(ticker_list2, get_volatility)
-sqrt_var2 <- lapply(volatility_all2, sqrt)
+volatilityAll2 <- lapply(tickerList2, GetVolatility)
+sqrtVar2 <- lapply(volatilityAll2, sqrt)
 
-sqrt_var_20 <- c(sqrt_var, sqrt_var2)
+sqrtVar20 <- c(sqrtVar, sqrtVar2)
 
+png("sigsvol.png")
 plot(NULL, xlim=c(1,3), ylim=c(0,0.55), ylab="sigma", xlab="Volatility Stage (BIC-optimal)",
-     xaxt = "n", main = "Sigmas vs Volatility stages")
+     xaxt = "n", main = "Sigmas vs Volatility stages",
+     cex.main=1.5, cex.lab=1.5,cex.axis=1.5)
 cols <- c(rep(c("red", "blue"), each = 5), rep(c("red", "blue"), each = 5))
 sapply(1:20, function(i){
-  vols <- sqrt_var_20[[i]]
+  vols <- sqrtVar20[[i]]
   lines(1:length(vols), vols, col = cols[i], type = "b")
 })
 axis(1, at = 1:3)
 legend("topleft", c("Mega cap", "Small cap"), col = c("red", "blue"), lty = c(1,1))
+dev.off()
 
+# Study Amazon (AMZN) more carefully.
+trainingInfo <- ExtractInfo("AMZN", numRm = 10)
+mu <- mean(trainingInfo[[1]])
+centeredReturns <- trainingInfo[[1]]
+forecast1 <- Simulation(10, mu, centeredReturns)
+forecast2 <- Simulation(10, mu, centeredReturns)
+forecast3 <- Simulation(10, mu, centeredReturns)
+
+actual <- info[[1]][215:224]
+
+dframe <- data.frame(forecast1, forecast2, forecast3,
+                     actual, date = index(info[[2]])[216:225])
+dframeLong <- melt(dframe, id="date")  # convert to long format
+
+ggplot(data=dframeLong,
+       aes(x=date, y=value, colour=variable)) +
+  geom_line() + ylab("Returns") + xlab("Date") + 
+  ggtitle("AMZN Predicted Returns vs Actual Returns")
